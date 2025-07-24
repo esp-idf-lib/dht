@@ -1,9 +1,4 @@
-.. Foo documentation master file, created by
-   sphinx-quickstart on Mon Jul 21 22:05:54 2025.
-   You can adapt this file completely to your liking, but it should at least
-   contain the root `toctree` directive.
+dht: Driver for DHT11, AM2301 (DHT21, DHT22, AM2302, AM2321), Itead Si7021
+==========================================================================
 
-Welcome to Foo's documentation!
-===============================
-
-.. doxygenfile:: template-component.h
+ .. doxygenfile:: dht.h
