@@ -25,4 +25,4 @@ issues: https://github.com/esp-idf-lib/dht/issues
 discussion: https://github.com/esp-idf-lib/core/discussions
 files:
   exclude:
-    - docs
+    - docs/**/*
