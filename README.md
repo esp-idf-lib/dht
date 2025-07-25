@@ -1,5 +1,9 @@
 # esp-idf-lib/dht
 
+[![Build examples](https://github.com/esp-idf-lib/dht/actions/workflows//build.yml/badge.svg)](https://github.com/esp-idf-lib/dht/actions/workflows//build.yml)
+[![Build docs](https://github.com/esp-idf-lib/dht/actions/workflows//build-docs.yml/badge.svg)](https://github.com/esp-idf-lib/dht/actions/workflows//build-docs.yml)
+[![Validation](https://github.com/esp-idf-lib/dht/actions/workflows//validate-component.yml/badge.svg)](https://github.com/esp-idf-lib/dht/actions/workflows//validate-component.yml)
+
 Driver for DHT11, AM2301 (DHT21, DHT22, AM2302, AM2321), Itead Si7021.
 
 * [Documentation](https://esp-idf-lib.github.io/dht/)
@@ -11,7 +15,7 @@ Driver for DHT11, AM2301 (DHT21, DHT22, AM2302, AM2321), Itead Si7021.
 ## Installation
 
 ```sh
-idf.py add-dependency esp-idf-lib/dht^1.1.0
+idf.py add-dependency esp-idf-lib/dht
 ```
 
 ## Support
