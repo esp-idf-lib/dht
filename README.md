@@ -11,7 +11,7 @@ Driver for DHT11, AM2301 (DHT21, DHT22, AM2302, AM2321), Itead Si7021.
 ## Installation
 
 ```sh
-idf.py add-dependency "esp-idf-lib/dht^1.1.0
+idf.py add-dependency esp-idf-lib/dht^1.1.0
 ```
 
 ## Support
