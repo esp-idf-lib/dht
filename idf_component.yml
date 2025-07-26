@@ -1,5 +1,5 @@
 ---
-version: 1.1.2
+version: 1.1.3
 description: Driver for DHT11, AM2301 (DHT21, DHT22, AM2302, AM2321), Itead Si7021
 license: BSD-3
 targets:
