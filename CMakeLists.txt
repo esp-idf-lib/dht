@@ -1,7 +1,9 @@
 if(${IDF_TARGET} STREQUAL esp8266)
     set(req esp8266 freertos log esp_idf_lib_helpers)
-else()
+elseif(${IDF_VERSION_MAJOR} STREQUAL 5 AND ${IDF_VERSION_MINOR} LESS 3)
     set(req driver freertos log esp_idf_lib_helpers)
+else()
+    set(req esp_driver_gpio freertos log esp_idf_lib_helpers)
 endif()
 
 idf_component_register(
