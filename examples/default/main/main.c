@@ -18,7 +18,7 @@ void dht_test(void *pvParameters)
     float temperature, humidity;
 
 #ifdef CONFIG_EXAMPLE_INTERNAL_PULLUP
-    gpio_set_pull_mode(dht_gpio, GPIO_PULLUP_ONLY);
+    gpio_set_pull_mode(CONFIG_EXAMPLE_DATA_GPIO, GPIO_PULLUP_ONLY);
 #endif
 
     while (1)
@@ -38,4 +38,3 @@ void app_main()
 {
     xTaskCreate(dht_test, "dht_test", configMINIMAL_STACK_SIZE * 3, NULL, 5, NULL);
 }
-
