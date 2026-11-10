@@ -15,7 +15,6 @@ depends:
 thread_safe: no
 targets:
   - esp32
-  - esp8266
   - esp32s2
   - esp32c3
   - esp32s3
