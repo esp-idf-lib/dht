@@ -1,18 +1,7 @@
 ---
-version: 1.2.0
+version: 1.2.1
 description: Driver for DHT11, AM2301 (DHT21, DHT22, AM2302, AM2321), Itead Si7021
-license: BSD-3
-targets:
-  - esp32
-  - esp32c2
-  - esp32c3
-  - esp32c5
-  - esp32c6
-  - esp32c61
-  - esp32h2
-  - esp32p4
-  - esp32s2
-  - esp32s3
+license: BSD-3-Clause
 dependencies:
   esp-idf-lib/esp_idf_lib_helpers:
     version: "*"
