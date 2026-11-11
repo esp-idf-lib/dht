@@ -13,7 +13,7 @@ depends:
   - freertos
   - driver
 thread_safe: no
-license: BSD-3
+license: BSD-3-Clause
 copyrights:
   - name: UncleRus
     year: 2018
