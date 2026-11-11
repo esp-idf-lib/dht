@@ -17,6 +17,7 @@ menu "Example configuration"
         default 4 if IDF_TARGET_ESP32H2
         default 4 if IDF_TARGET_ESP32P4
         default 17 if IDF_TARGET_ESP32 || IDF_TARGET_ESP32S2 || IDF_TARGET_ESP32S3
+        default 17
         help
             GPIO number connected to DATA pin
 
