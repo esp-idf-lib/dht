@@ -5,5 +5,3 @@ dependencies:
   esp-idf-lib/dht:
     version: "*"
     override_path: "../../../"
-  esp-idf-lib/esp_idf_lib_helpers:
-    version: "*"
