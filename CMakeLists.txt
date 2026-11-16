@@ -3,7 +3,7 @@ include(eil_check_idf_features)
 eil_check_idf_has_esp_drivers()
 
 # List of common ESP-IDF components required by this component
-set(REQUIRED_COMPONENTS freertos esp_idf_lib_helpers)
+set(REQUIRED_COMPONENTS freertos esp_timer)
 
 if(EIL_IDF_HAS_ESP_DRIVERS)
     list(APPEND REQUIRED_COMPONENTS esp_driver_gpio)

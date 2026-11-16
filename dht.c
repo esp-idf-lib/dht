@@ -41,10 +41,9 @@
 #include "dht.h"
 
 #include <freertos/FreeRTOS.h>
-#include <string.h>
 #include <esp_log.h>
-#include <ets_sys.h>
-#include <esp_idf_lib_helpers.h>
+#include <esp_rom_sys.h>
+#include <esp_timer.h>
 
 // DHT timer precision in microseconds
 #define DHT_TIMER_INTERVAL 2
@@ -81,90 +80,111 @@
 
 static const char *TAG = "dht";
 
-#if HELPER_TARGET_IS_ESP32
 static portMUX_TYPE mux = portMUX_INITIALIZER_UNLOCKED;
 #define PORT_ENTER_CRITICAL() portENTER_CRITICAL(&mux)
 #define PORT_EXIT_CRITICAL() portEXIT_CRITICAL(&mux)
 
-#elif HELPER_TARGET_IS_ESP8266
-#define PORT_ENTER_CRITICAL() portENTER_CRITICAL()
-#define PORT_EXIT_CRITICAL() portEXIT_CRITICAL()
-#endif
-
 #define CHECK_ARG(VAL) do { if (!(VAL)) return ESP_ERR_INVALID_ARG; } while (0)
-
-#define CHECK_LOGE(x, msg, ...) do { \
-        esp_err_t __; \
-        if ((__ = x) != ESP_OK) { \
-            PORT_EXIT_CRITICAL(); \
-            ESP_LOGE(TAG, msg, ## __VA_ARGS__); \
+#define CHECK(x) do { \
+        esp_err_t __ = (x); \
+        if (__ != ESP_OK) \
             return __; \
-        } \
     } while (0)
+
+static bool dht_type_valid(dht_sensor_type_t type)
+{
+    return type == DHT_TYPE_DHT11 || type == DHT_TYPE_AM2301 || type == DHT_TYPE_SI7021;
+}
 
 
 /**
- * Wait specified time for pin to go to a specified state.
- * If timeout is reached and pin doesn't go to a requested state
- * false is returned.
- * The elapsed time is returned in pointer 'duration' if it is not NULL.
+ * Wait for the pin to go to a specified state, but no longer than 'timeout'
+ * microseconds. The time that has passed before the state was seen is
+ * returned in 'duration' if it is not NULL.
+ *
+ * The direction of the pin must be set to the input before the call.
  */
 static esp_err_t dht_await_pin_state(gpio_num_t pin, uint32_t timeout,
                                      int expected_pin_state, uint32_t *duration)
 {
-    /* XXX dht_await_pin_state() should save pin direction and restore
-     * the direction before return. however, the SDK does not provide
-     * gpio_get_direction().
-     */
-    gpio_set_direction(pin, GPIO_MODE_INPUT);
-    for (uint32_t i = 0; i < timeout; i += DHT_TIMER_INTERVAL)
+    int64_t start = esp_timer_get_time();
+
+    for (;;)
     {
-        // need to wait at least a single interval to prevent reading a jitter
-        ets_delay_us(DHT_TIMER_INTERVAL);
+        int64_t elapsed;
+
+        // a sample takes a couple of microseconds, so wait first and only then
+        // look at the line: this skips the jitter of the edge itself
+        esp_rom_delay_us(DHT_TIMER_INTERVAL);
+        elapsed = esp_timer_get_time() - start;
+
         if (gpio_get_level(pin) == expected_pin_state)
         {
             if (duration)
-                *duration = i;
+                *duration = (uint32_t)elapsed;
             return ESP_OK;
         }
-    }
 
-    return ESP_ERR_TIMEOUT;
+        if ((uint32_t)elapsed >= timeout)
+            return ESP_ERR_TIMEOUT;
+    }
 }
 
 /**
  * Request data from DHT and read raw bit stream.
  * The function call should be protected from task switching.
- * Return false if error occurred.
+ * On a timeout, 'failed_at' points to the name of the place where the line
+ * did not change in time; the caller reports it after leaving the critical
+ * section, because logging is not allowed there.
  */
-static inline esp_err_t dht_fetch_data(dht_sensor_type_t sensor_type, gpio_num_t pin, uint8_t data[DHT_DATA_BYTES])
+static inline esp_err_t dht_fetch_data(dht_sensor_type_t sensor_type, gpio_num_t pin, uint8_t data[DHT_DATA_BYTES],
+                                       const char **failed_at)
 {
+    esp_err_t err;
     uint32_t low_duration;
     uint32_t high_duration;
 
     // Phase 'A' pulling signal low to initiate read sequence
-    gpio_set_direction(pin, GPIO_MODE_OUTPUT_OD);
     gpio_set_level(pin, 0);
-    ets_delay_us(sensor_type == DHT_TYPE_SI7021 ? 500 : 20000);
+    esp_rom_delay_us(sensor_type == DHT_TYPE_SI7021 ? 500 : 20000);
     gpio_set_level(pin, 1);
 
+    // the sensor drives the line from now on, so the direction is switched
+    // once instead of being switched on every phase and every bit
+    gpio_set_direction(pin, GPIO_MODE_INPUT);
+
     // Step through Phase 'B', 40us
-    CHECK_LOGE(dht_await_pin_state(pin, 40, 0, NULL),
-               "Initialization error, problem in phase 'B'");
+    if ((err = dht_await_pin_state(pin, 40, 0, NULL)) != ESP_OK)
+    {
+        *failed_at = "phase 'B'";
+        return err;
+    }
     // Step through Phase 'C', 88us
-    CHECK_LOGE(dht_await_pin_state(pin, 88, 1, NULL),
-               "Initialization error, problem in phase 'C'");
+    if ((err = dht_await_pin_state(pin, 88, 1, NULL)) != ESP_OK)
+    {
+        *failed_at = "phase 'C'";
+        return err;
+    }
     // Step through Phase 'D', 88us
-    CHECK_LOGE(dht_await_pin_state(pin, 88, 0, NULL),
-               "Initialization error, problem in phase 'D'");
+    if ((err = dht_await_pin_state(pin, 88, 0, NULL)) != ESP_OK)
+    {
+        *failed_at = "phase 'D'";
+        return err;
+    }
 
     // Read in each of the 40 bits of data...
     for (int i = 0; i < DHT_DATA_BITS; i++)
     {
-        CHECK_LOGE(dht_await_pin_state(pin, 65, 1, &low_duration),
-                   "LOW bit timeout");
-        CHECK_LOGE(dht_await_pin_state(pin, 75, 0, &high_duration),
-                   "HIGH bit timeout");
+        if ((err = dht_await_pin_state(pin, 65, 1, &low_duration)) != ESP_OK)
+        {
+            *failed_at = "the low part of a bit";
+            return err;
+        }
+        if ((err = dht_await_pin_state(pin, 90, 0, &high_duration)) != ESP_OK)
+        {
+            *failed_at = "the high part of a bit";
+            return err;
+        }
 
         uint8_t b = i / 8;
         uint8_t m = i % 8;
@@ -186,7 +206,7 @@ static inline int16_t dht_convert_data(dht_sensor_type_t sensor_type, uint8_t ms
 
     if (sensor_type == DHT_TYPE_DHT11)
     {
-        data = msb * 10;
+        data = msb * 10 + lsb;
     }
     else
     {
@@ -204,16 +224,24 @@ esp_err_t dht_read_data(dht_sensor_type_t sensor_type, gpio_num_t pin,
                         int16_t *humidity, int16_t *temperature)
 {
     CHECK_ARG(humidity || temperature);
+    CHECK_ARG(GPIO_IS_VALID_OUTPUT_GPIO(pin));
+    CHECK_ARG(dht_type_valid(sensor_type));
 
     uint8_t data[DHT_DATA_BYTES] = { 0 };
 
-    gpio_set_direction(pin, GPIO_MODE_OUTPUT_OD);
-    gpio_set_level(pin, 1);
+    CHECK(gpio_set_direction(pin, GPIO_MODE_OUTPUT_OD));
+    CHECK(gpio_set_level(pin, 1));
+
+    const char *failed_at = NULL;
 
     PORT_ENTER_CRITICAL();
-    esp_err_t result = dht_fetch_data(sensor_type, pin, data);
-    if (result == ESP_OK)
-        PORT_EXIT_CRITICAL();
+    esp_err_t result = dht_fetch_data(sensor_type, pin, data, &failed_at);
+    PORT_EXIT_CRITICAL();
+
+    // logging takes a lock of the C library, so it must not happen while
+    // the interrupts are disabled
+    if (result != ESP_OK)
+        ESP_LOGE(TAG, "Timeout at %s", failed_at);
 
     /* restore GPIO direction because, after calling dht_fetch_data(), the
      * GPIO direction mode changes */

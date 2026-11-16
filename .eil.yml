@@ -9,8 +9,8 @@ code_owners:
   - UncleRus
 depends:
   - log
-  - esp_idf_lib_helpers
   - freertos
+  - esp_timer
   - driver
 thread_safe: no
 license: BSD-3-Clause
