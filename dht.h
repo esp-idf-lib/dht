@@ -40,7 +40,29 @@
  *
  * BSD Licensed as described in the file LICENSE
  *
- * @note A suitable pull-up resistor should be connected to the selected GPIO line
+ * @note A pull-up resistor of 4.7 to 10 kOhm between the data line and the
+ * supply is required. The internal pull-up of the ESP32 is about 45 kOhm and
+ * is only a fallback for a breadboard with short wires: with it the edges are
+ * slow and the readings become unreliable, which shows up as "phase B" errors.
+ * Sensors mounted on a PCB, like the common blue DHT22 modules, already have
+ * the resistor.
+ *
+ * @note A transaction holds the CPU with the interrupts disabled for about
+ * 26 ms: the driver has to keep the line low for 20 ms to start the sensor and
+ * then read the 40 bits by polling. During that time the other tasks of the
+ * same core do not run, the tick is delayed, and Wi-Fi or Bluetooth may lose
+ * packets. Do not read the sensor more often than once a second: the sensor
+ * heats up and the readings drift.
+ *
+ * @note The driver is not thread safe in the usual sense: concurrent calls are
+ * serialized by an internal lock, but the second caller waits for the whole
+ * transaction, and on a dual-core chip it blocks the other core as well.
+ *
+ * @note DHT_TYPE_SI7021 means a device that speaks this single-wire protocol,
+ * not the Silicon Labs Si7021 chip: that chip is an I2C part and cannot be read
+ * by this driver. Some small sensors built around it, for example the Itead
+ * module, wrap it into a DHT-compatible protocol, and that is the case the
+ * type is for.
  *
  */
 #ifndef __DHT_H__
@@ -69,11 +91,17 @@ typedef enum
  * Humidity and temperature are returned as integers.
  * For example: humidity=625 is 62.5 %, temperature=244 is 24.4 degrees Celsius
  *
- * @param sensor_type DHT11 or DHT22
- * @param pin GPIO pin connected to sensor OUT
+ * @param sensor_type DHT11, AM2301 or SI7021
+ * @param pin GPIO pin connected to sensor OUT; must be an output capable pin
  * @param[out] humidity Humidity, percents * 10, nullable
  * @param[out] temperature Temperature, degrees Celsius * 10, nullable
- * @return `ESP_OK` on success
+ * @return
+ *      - `ESP_OK` on success
+ *      - `ESP_ERR_INVALID_ARG` if both outputs are NULL, the pin cannot be used
+ *        as an output, or the sensor type is unknown
+ *      - `ESP_ERR_TIMEOUT` if the sensor did not answer or the frame was
+ *        interrupted
+ *      - `ESP_ERR_INVALID_CRC` if the checksum does not match
  */
 esp_err_t dht_read_data(dht_sensor_type_t sensor_type, gpio_num_t pin,
                         int16_t *humidity, int16_t *temperature);
@@ -83,11 +111,11 @@ esp_err_t dht_read_data(dht_sensor_type_t sensor_type, gpio_num_t pin,
  *
  * Humidity and temperature are returned as floats.
  *
- * @param sensor_type DHT11 or DHT22
- * @param pin GPIO pin connected to sensor OUT
+ * @param sensor_type DHT11, AM2301 or SI7021
+ * @param pin GPIO pin connected to sensor OUT; must be an output capable pin
  * @param[out] humidity Humidity, percents, nullable
  * @param[out] temperature Temperature, degrees Celsius, nullable
- * @return `ESP_OK` on success
+ * @return the same codes as dht_read_data()
  */
 esp_err_t dht_read_float_data(dht_sensor_type_t sensor_type, gpio_num_t pin,
                               float *humidity, float *temperature);
